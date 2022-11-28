@@ -3,7 +3,9 @@ This is a repository for an automatic guitar tuner project.
 This project utilizes the Adafruit Feather RP2040 with CircuitPython.
 
 ## Hardware Setup
-Connect a servo motor using it's 3 pins. The power wire should connect to one of the 3.3V pins, the ground wire should connect to the GND pin, and the signal wire should connect to the A2 pin.
+Connect the two servo motors using it's 3 pins. The power wire should connect to one of the 3.3V pins, the ground wire should connect to the GND pin, and the signal wire should connect to the A1 for one motor and the A2 pin for the other motor.
+
+Below is the pin out mapping for connecting the RP2040 with the LCD interface.
 
 ## Software Installation
 In order to start writing Python scripts for the RP2040, follow these steps:
@@ -14,5 +16,6 @@ In order to start writing Python scripts for the RP2040, follow these steps:
 5. Copy the repo and add the code.py file into the mounted board. The board should flash and run the code.
 
 ## Usage
-The board interfaces with a single servo motor. 
-Separately, we have code for interfacing with a comparator circuit that takes in simple sine wave and converts it into a square wave.
+The board contorls the two servo motor and a LCD based on user input and the processed input frequency from the comparator circuit implementation. The comparator circuit is used to process the analog input from the vibration sensor and convert it to a digital output that can be interrpreted in software.
+
+The LCD is connected to two button, one button switches between the type of string to be tuned and the second button confirms the string selection.
