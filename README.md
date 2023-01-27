@@ -18,13 +18,13 @@ In order to start writing Python scripts for the RP2040, follow these steps:
 6. Connect to the USB serial port via the nRF terminal in VSCode or minicom if you're using a Mac.
 
 ## Usage
-The board contorls the two servo motors and a LCD based on user input and the processed input frequency from the comparator circuit implementation. The comparator circuit is used to process the analog input from the vibration sensor and convert it to a digital output that can be interrpreted in software.
+The board controls the two servo motors and a LCD based on user input and the processed input frequency from the comparator circuit implementation. The comparator circuit is used to process the analog input from the vibration sensor and convert it to a digital output that can be interpreted in software.
 
-The LCD is connected to two button, one button switches between the type of string to be tuned and the second button confirms the string selection. Information is displayed on the LCD as the programm progresses.
+The LCD is connected to two button, one button switches between the type of string to be tuned and the second button confirms the string selection. Information is displayed on the LCD as the program progresses.
 
 ## Overall Procedure
 1. Press one button to iterate through all the string options and press the other button to select the current string displayed on the LCD.
-2. The target frequency will then display on the LCD for a moment before the program intiates the frequency measurements/calculations.
+2. The target frequency will then display on the LCD for a moment before the program initiates the frequency measurements/calculations.
 3. As the program runs, it will first measure the frequency and compare it against the target frequency. When it's too low or too high, the LCD will notify the user and the motors will turn either left or right, which moves the tuning peg.
-4. If the measured frequency is correct then the tuning is completed and the program ends. Otherwise, s tep 3. is repeated until it is reached.
+4. If the measured frequency is correct, then the tuning is completed and the program ends. Otherwise, repeat step 3 until the desired frequency value is measured.
 
