@@ -1,3 +1,4 @@
+####################### IMPORTS #######################
 import board
 import countio
 import time
@@ -6,19 +7,27 @@ import digitalio
 from adafruit_motor import servo
 import adafruit_character_lcd.character_lcd as characterlcd
 
+
+####################### GLOBALS #######################
 string_notes = {​​​​​​​'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }​​​​​​​
 notes = {​​​​​​​0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}​​​​​​​
 
-start_threshold = 10 # defines range of freqs that will be considered
-stop_threshold = 1 # defines range of freqs that will be considered in tune
-target_freq_low = 0 # lower limit for in-tune freq
-target_freq_high = 0 # upper limit for in-tune freq
-pass_band_low = 0 # lower limit for freqs that will be considered
-pass_band_high = 0 # upper limit for freqs that will be considered
+start_threshold = 10 # Range of Frequencies Considered
+stop_threshold = 1 # Range of Frequencies Considered In Tune
+
+# Target Frequency (Lower/Upper Limit of "In Tune" Frequencies for a Note)
+target_freq_low = 0
+target_freq_high = 0
+
+# Pass Band Filter (Lower/Upper Limit of Frequencies for Filter)
+pass_band_low = 0
+pass_band_high = 0
+
 output_freq = 0 # freq for motor task to process
 prev_time = 0 # state variable used to calculate period of waveform
 
-# Servo setup
+
+####################### SERVOS ########################
 pwm_servo1 = pwmio.PWMOut(board.A1, duty_cycle=2 ** 15, frequency=50)
 servo1 = servo.ContinuousServo(
     pwm_servo1, min_pulse=500, max_pulse=2360
@@ -28,7 +37,8 @@ servo2 = servo.ContinuousServo(
     pwm_servo2, min_pulse=600, max_pulse=2460
 )
 
-# Pin Config:
+
+################## PIN CONFIGURATION ##################
 lcd_rs = digitalio.DigitalInOut(board.D5)
 lcd_en = digitalio.DigitalInOut(board.D6)
 lcd_d7 = digitalio.DigitalInOut(board.D10)
@@ -39,70 +49,87 @@ lcd_backlight = digitalio.DigitalInOut(board.D4)
 lcd_columns = 16
 lcd_rows = 2
 
-# Buttons config
-button1 = digitalio.DigitalInOut(board.D25)
-button2 = digitalio.DigitalInOut(board.D24)
+lcd = characterlcd.Character_LCD_Mono( # Initialize the lcd class
+    lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, 
+    lcd_d7, lcd_columns, lcd_rows, lcd_backlight)
+
+
+################ BUTTON CONFIGURATION #################
+button1 = digitalio.DigitalInOut(board.D25) # Change String
 button1.direction = digitalio.Direction.INPUT
-button1.pull = digitalio.Pull.UP # changes string
+button1.pull = digitalio.Pull.UP
+
+button2 = digitalio.DigitalInOut(board.D24) # Select String
 button2.direction = digitalio.Direction.INPUT
-button2.pull = digitalio.Pull.UP # selects string
+button2.pull = digitalio.Pull.UP
 
-# Initialize the lcd class
-lcd = characterlcd.Character_LCD_Mono(
-    lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7, lcd_columns, lcd_rows, lcd_backlight
-)
 
-# Allows user to select a string and sets up relevant vars to begin tuning
+###################### FUNCTIONS ######################
+
+# Initialize Tuning
 def init():
     global target_freq_low, target_freq_high, pass_band_low, pass_band_high
+    
+    # RESET #
     lcd.clear()
     selected = False
     idx = 0
     note = notes[idx]
 
+    # WAIT UNTIL USER SELECTS A STRING #
     while not selected:
+        # Check if Select String button pressed
         if not button2.value:
-            # select curr string
             selected = True
+        # Check if Change String button pressed
         if not button1.value:
+            # Increment Index / Reset
             if idx >= 5:
                 idx = 0
             else:
                 idx += 1
-            time.sleep(0.5)  # debounce delay
-            note = notes[idx]
-            #print(note)
-        lcd.message = "Select string "+note.upper()
-    #print("Done selecting string")
+            
+            time.sleep(0.5)  # Debounce Button
+            note = notes[idx] # Update String Note
+        lcd.message = "Select string " + note.upper()
+    
+    # INITIALIZE VARIABLES #
+    # Inform User of Selected String
     lcd.clear()
     lcd.message = "Selected string \n" + note.upper()
     time.sleep(0.5)
+    
+    # Inform User of Target Frequency
     target_freq = string_notes[note]
-    #print("Target frequency: ", target_freq, "\n")
     lcd.clear()
     lcd.message = "Target: " + str(target_freq)
     time.sleep(0.5)
+    
+    # Calculate Limits of Target Frequency and Pass Band Filter
     target_freq_low = target_freq - stop_threshold
     target_freq_high = target_freq + stop_threshold
     pass_band_low = target_freq - start_threshold
     pass_band_high = target_freq + start_threshold
 
-# takes in measured frequency and target frequency, moves servo accordingly
+
+# Tune String Based on Frequency and Target Limits
 def tune(freq, target_freq_low, target_freq_high):
+    # If Frequency Higher than Highest Target Frequency
     if freq > target_freq_high:
-        move_servo(0.1, 1.0)
-        lcd.clear()
-        print("Frequency too high, strum again!")
+        move_servo(0.1, 1.0) # Move Servo
+        lcd.clear() # Inform User
         lcd.message = str(freq) + " too high,\nstrum again!"
+        
+    # If Frequency Lower than Lowest Target Frequency
     elif freq < target_freq_low:
-        move_servo(-0.1, 1.0)
-        lcd.clear()
-        print("Frequency too low, strum again!")
+        move_servo(-0.1, 1.0) # Move Servo
+        lcd.clear() # Inform User
         lcd.message = str(freq) + " too low,\nstrum again!"
-    #print("Tuning...\n input_freq=",freq)
+    
     return freq
 
-# Moves servo at specified throttle for specified time interval
+
+# Moves Servo At Specified Throttle for a Given Time
 def move_servo(throttle, interval):
     servo1.throttle = throttle
     servo2.throttle = throttle
@@ -111,36 +138,45 @@ def move_servo(throttle, interval):
     servo2.throttle = 0
     time.sleep(interval)
 
-# Async function that continously runs that calculates freq of inputted waveform
+############### ASYNCHRONOUS FUNCTIONS ###############
+
+# Continuously Calculate Frequency of Input Waveform
 async def monitor_freq(pin):
     with countio.Counter(pin) as interrupt:
         while True:
+            # Check for Interrupt
             if interrupt.count > 0:
                 global prev_time, output_freq
+                # Calculate Frequency
                 curr_time = time.monotonic_ns()
                 delta_t = curr_time - prev_time
                 output_freq = interrupt.count / (delta_t / 1000000000)
+                
+                # Update Prev Time and Reset Interrupt
                 prev_time = curr_time
                 interrupt.count = 0
-                #print("Period is", delta_t, " ns")
                 print("Frequency is", output_freq, "Hz")
             await asyncio.sleep(2.0)
 
-# Async function that continuously runs that turns motor
+# Continuously Turn Motor Until Tuned
 async def turn_motor():
     while True:
         global output_freq
-        #print(output_freq)
+        # Check if Output Frequency is in Pass Band Limits
         if (output_freq > pass_band_low) and (output_freq < pass_band_high):
+            # Check if Output Frequency is not in Target Frequency Limits
             if (output_freq < target_freq_low) or (output_freq > target_freq_high):
-                output_freq = tune(output_freq, target_freq_low, target_freq_high)
+                output_freq = tune(output_freq, target_freq_low, target_freq_high) # Tune String
+            
+            # Tuning Finished
             else:
-                lcd.clear()
+                lcd.clear() # Inform User
                 lcd.message = "Finished\ntuning!"
                 time.sleep(1)
-                init();
+                init() # Reset Program
         await asyncio.sleep(2.0)
 
+# Main
 async def main():
     init()
     freq_task = asyncio.create_task(monitor_freq(board.RX))
@@ -148,4 +184,5 @@ async def main():
     print("Starting...")
     await asyncio.gather(freq_task, motor_task)
 
+# Run Program
 asyncio.run(main())
