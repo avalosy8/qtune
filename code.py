@@ -3,11 +3,14 @@ import countio
 import time
 import pwmio
 import digitalio
+import asyncio
 from adafruit_motor import servo
 import adafruit_character_lcd.character_lcd as characterlcd
 
-string_notes = {​​​​​​​'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }​​​​​​​
-notes = {​​​​​​​0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}​​​​​​​
+string_notes = {'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }
+notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
+notes_to_servo = {'e': 1, 'A': 2, 'D': 3, 'G': 4, 'B': 5, 'E': 6} # for moving servos
+current_servo = 0
 
 start_threshold = 10 # defines range of freqs that will be considered
 stop_threshold = 1 # defines range of freqs that will be considered in tune
@@ -18,15 +21,19 @@ pass_band_high = 0 # upper limit for freqs that will be considered
 output_freq = 0 # freq for motor task to process
 prev_time = 0 # state variable used to calculate period of waveform
 
-# Servo setup
-pwm_servo1 = pwmio.PWMOut(board.A1, duty_cycle=2 ** 15, frequency=50)
-servo1 = servo.ContinuousServo(
-    pwm_servo1, min_pulse=500, max_pulse=2360
-)
-pwm_servo2 = pwmio.PWMOut(board.A2, duty_cycle=2 ** 15, frequency=50)
-servo2 = servo.ContinuousServo(
-    pwm_servo2, min_pulse=600, max_pulse=2460
-)
+pwm1 = pwmio.PWMOut(board.A1, frequency=50)
+pwm2 = pwmio.PWMOut(board.A2, frequency=50)
+pwm3 = pwmio.PWMOut(board.A0, frequency=50)
+pwm4 = pwmio.PWMOut(board.D13, frequency=50)
+pwm5 = pwmio.PWMOut(board.SCL, frequency=50)
+pwm6 = pwmio.PWMOut(board.SDA, frequency=50)
+
+servo1 = servo.ContinuousServo(pwm1)
+servo2 = servo.ContinuousServo(pwm2)
+servo3 = servo.ContinuousServo(pwm3)
+servo4 = servo.ContinuousServo(pwm4)
+servo5 = servo.ContinuousServo(pwm5)
+servo6 = servo.ContinuousServo(pwm6)
 
 # Pin Config:
 lcd_rs = digitalio.DigitalInOut(board.D5)
@@ -71,14 +78,13 @@ def init():
                 idx += 1
             time.sleep(0.5)  # debounce delay
             note = notes[idx]
-            #print(note)
         lcd.message = "Select string "+note.upper()
-    #print("Done selecting string")
     lcd.clear()
     lcd.message = "Selected string \n" + note.upper()
     time.sleep(0.5)
     target_freq = string_notes[note]
-    #print("Target frequency: ", target_freq, "\n")
+    current_servo = notes_to_servo[note]
+    print("Current servo = " + str(current_servo))
     lcd.clear()
     lcd.message = "Target: " + str(target_freq)
     time.sleep(0.5)
@@ -86,6 +92,7 @@ def init():
     target_freq_high = target_freq + stop_threshold
     pass_band_low = target_freq - start_threshold
     pass_band_high = target_freq + start_threshold
+
 
 # takes in measured frequency and target frequency, moves servo accordingly
 def tune(freq, target_freq_low, target_freq_high):
@@ -99,16 +106,69 @@ def tune(freq, target_freq_low, target_freq_high):
         lcd.clear()
         print("Frequency too low, strum again!")
         lcd.message = str(freq) + " too low,\nstrum again!"
-    #print("Tuning...\n input_freq=",freq)
+    return freq
+
+# has servo_num as parameter
+def tune(freq, target_freq_low, target_freq_high, servo_num):
+    if freq > target_freq_high:
+        move_servo(0.1, 1.0, servo_num)
+        lcd.clear()
+        print("Frequency too high, strum again!")
+        lcd.message = str(freq) + " too high,\nstrum again!"
+    elif freq < target_freq_low:
+        move_servo(-0.1, 1.0, servo_num)
+        lcd.clear()
+        print("Frequency too low, strum again!")
+        lcd.message = str(freq) + " too low,\nstrum again!"
     return freq
 
 # Moves servo at specified throttle for specified time interval
 def move_servo(throttle, interval):
+    print("Moving all servos")
     servo1.throttle = throttle
     servo2.throttle = throttle
+    servo3.throttle = throttle
+    servo4.throttle = throttle
+    servo5.throttle = throttle
+    servo6.throttle = throttle
+
     time.sleep(interval)
     servo1.throttle = 0
     servo2.throttle = 0
+    servo3.throttle = 0
+    servo4.throttle = 0
+    servo5.throttle = 0
+    servo6.throttle = 0
+
+    time.sleep(interval)
+
+# has servo_num as parameter
+def move_servo(throttle, interval, servo_num):
+    print("moving servo: " + str(servo_num))
+    if servo_num == 1:
+        servo1.throttle = throttle
+        time.sleep(interval)
+        servo1.throttle = 0
+    elif servo_num == 2:
+        servo2.throttle = throttle
+        time.sleep(interval)
+        servo2.throttle = 0
+    elif servo_num == 3:
+        servo3.throttle = throttle
+        time.sleep(interval)
+        servo3.throttle = 0
+    elif servo_num == 4:
+        servo4.throttle = throttle
+        time.sleep(interval)
+        servo4.throttle = 0
+    elif servo_num == 5:
+        servo5.throttle = throttle
+        time.sleep(interval)
+        servo5.throttle = 0
+    elif servo_num == 6:
+        servo6.throttle = throttle
+        time.sleep(interval)
+        servo6.throttle = 0
     time.sleep(interval)
 
 # Async function that continously runs that calculates freq of inputted waveform
@@ -122,18 +182,18 @@ async def monitor_freq(pin):
                 output_freq = interrupt.count / (delta_t / 1000000000)
                 prev_time = curr_time
                 interrupt.count = 0
-                #print("Period is", delta_t, " ns")
                 print("Frequency is", output_freq, "Hz")
             await asyncio.sleep(2.0)
+
 
 # Async function that continuously runs that turns motor
 async def turn_motor():
     while True:
         global output_freq
-        #print(output_freq)
         if (output_freq > pass_band_low) and (output_freq < pass_band_high):
             if (output_freq < target_freq_low) or (output_freq > target_freq_high):
                 output_freq = tune(output_freq, target_freq_low, target_freq_high)
+                #output_freq = tune(output_freq, target_freq_low, target_freq_high, current_servo) 
             else:
                 lcd.clear()
                 lcd.message = "Finished\ntuning!"
@@ -146,6 +206,13 @@ async def main():
     freq_task = asyncio.create_task(monitor_freq(board.RX))
     motor_task = asyncio.create_task(turn_motor())
     print("Starting...")
+    # move_servo(1,1,1) 
+    # move_servo(1,1,2)
+    # move_servo(1,1,3)
+    # move_servo(1,1,4)
+    # move_servo(1,1,5)
+    # move_servo(1,1,6)
+
     await asyncio.gather(freq_task, motor_task)
 
 asyncio.run(main())
