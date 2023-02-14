@@ -18,10 +18,14 @@ stop_threshold = 1 # Range of Frequencies Considered In Tune
 # Target Frequency (Lower/Upper Limit of "In Tune" Frequencies for a Note)
 target_freq_low = 0
 target_freq_high = 0
+double_target_freq_low = 0
+double_target_freq_high = 0
 
 # Pass Band Filter (Lower/Upper Limit of Frequencies for Filter)
 pass_band_low = 0
 pass_band_high = 0
+double_pass_band_low = 0
+double_pass_band_high = 0
 
 output_freq = 0 # freq for motor task to process
 prev_time = 0 # state variable used to calculate period of waveform
@@ -69,6 +73,7 @@ button2.pull = digitalio.Pull.UP
 # Initialize Tuning
 def init():
     global target_freq_low, target_freq_high, pass_band_low, pass_band_high
+    global double_target_freq_low, double_target_freq_high, double_pass_band_low, double_pass_band_high
     
     # RESET #
     lcd.clear()
@@ -83,11 +88,8 @@ def init():
             selected = True
         # Check if Change String button pressed
         if not button1.value:
-            # Increment Index / Reset
-            if idx >= 5:
-                idx = 0
-            else:
-                idx += 1
+            # Increment Index
+            idx = idx + 1 if idx < 5 else 0
             
             time.sleep(0.5)  # Debounce Button
             note = notes[idx] # Update String Note
@@ -110,7 +112,12 @@ def init():
     target_freq_high = target_freq + stop_threshold
     pass_band_low = target_freq - start_threshold
     pass_band_high = target_freq + start_threshold
-
+    
+    # Calculate Doubled Limits
+    double_target_freq_low = target_freq*2 - stop_threshold
+    double_target_freq_high = target_freq*2 + stop_threshold
+    double_pass_band_low = target_freq*2 - start_threshold
+    double_pass_band_high = target_freq*2 + start_threshold
 
 # Tune String Based on Frequency and Target Limits
 def tune(freq, target_freq_low, target_freq_high):
@@ -174,6 +181,19 @@ async def turn_motor():
                 lcd.message = "Finished\ntuning!"
                 time.sleep(1)
                 init() # Reset Program
+        
+        # Check for Doubled Frequency Values
+        elif (output_freq > double_pass_band_low) and (output_freq < double_pass_band_high):
+            if (output_freq < double_target_freq_low) or (output_freq > double_target_freq_high):
+                output_freq = tune(output_freq, double_target_freq_low, double_target_freq_high)
+            
+            # Tuning Finished
+            else:
+                lcd.clear() # Inform User
+                lcd.message = "Finished\ntuning!"
+                time.sleep(1)
+                init() # Reset Program
+        
         await asyncio.sleep(2.0)
 
 # Main
