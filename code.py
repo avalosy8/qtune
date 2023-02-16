@@ -83,6 +83,7 @@ button2.pull = digitalio.Pull.UP
 
 # Initialize Tuning
 def init():
+    global current_servo
     global target_freq_low, target_freq_high, pass_band_low, pass_band_high
     global double_target_freq_low, double_target_freq_high, double_pass_band_low, double_pass_band_high
     
@@ -224,6 +225,7 @@ async def monitor_freq(pin):
 # Continuously Turn Motor Until Tuned
 async def turn_motor():
     while True:
+        global current_servo
         global output_freq
         # Check if Output Frequency is in Pass Band Limits
         if (output_freq > pass_band_low) and (output_freq < pass_band_high):
