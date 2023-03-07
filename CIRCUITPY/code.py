@@ -3,9 +3,13 @@ import countio
 import time
 import pwmio
 import digitalio
-import asyncio
 from adafruit_motor import servo
 import adafruit_character_lcd.character_lcd as characterlcd
+
+try:
+  import ulab.numpy as np
+except ImportError:
+  import numpy as np
 
 string_notes = {'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }
 notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
@@ -65,7 +69,7 @@ lcd_columns = 16
 lcd_rows = 2
 
 lcd = characterlcd.Character_LCD_Mono( # Initialize the lcd class
-    lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, 
+    lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6,
     lcd_d7, lcd_columns, lcd_rows, lcd_backlight)
 
 
@@ -86,7 +90,7 @@ def init():
     global current_servo
     global target_freq_low, target_freq_high, pass_band_low, pass_band_high
     global double_target_freq_low, double_target_freq_high, double_pass_band_low, double_pass_band_high
-    
+
     # RESET #
     lcd.clear()
     selected = False
@@ -102,76 +106,67 @@ def init():
         if not button1.value:
             # Increment Index
             idx = idx + 1 if idx < 5 else 0
-            
+
             time.sleep(0.5)  # Debounce Button
             note = notes[idx] # Update String Note
-        lcd.message = "Select string " + note.upper()
-    
+        lcd.message = "Select string " + note
+
     # INITIALIZE VARIABLES #
     # Inform User of Selected String
     lcd.clear()
     lcd.message = "Selected string \n" + note.upper()
     time.sleep(0.5)
-    
+
     # Inform User of Target Frequency and set current_servo
     target_freq = string_notes[note]
     current_servo = notes_to_servo[note]
     print("Current servo = " + str(current_servo))
     lcd.clear()
-    lcd.message = "Target: " + str(target_freq)
+    lcd.message = "Target: " + str(target_freq) + " Hz"
     time.sleep(0.5)
-    
+
     # Calculate Limits of Target Frequency and Pass Band Filter
     target_freq_low = target_freq - stop_threshold
     target_freq_high = target_freq + stop_threshold
     pass_band_low = target_freq - start_threshold
     pass_band_high = target_freq + start_threshold
-    
+
     # Calculate Doubled Limits
     double_target_freq_low = target_freq*2 - stop_threshold
     double_target_freq_high = target_freq*2 + stop_threshold
     double_pass_band_low = target_freq*2 - start_threshold
     double_pass_band_high = target_freq*2 + start_threshold
 
-# Tune String Based on Frequency and Target Limits
-def tune(freq, target_freq_low, target_freq_high):
-    # If Frequency Higher than Highest Target Frequency
-    if freq > target_freq_high:
-        move_servo(0.5, 0.2) # Move Servo
-        lcd.clear() # Inform User
-        lcd.message = str(freq) + " too high,\nstrum again!"
-        
-    # If Frequency Lower than Lowest Target Frequency
-    elif freq < target_freq_low:
-        move_servo(-0.5, 0.2) # Move Servo
-        lcd.clear() # Inform User
-        lcd.message = str(freq) + " too low,\nstrum again!"
-    
-    return freq
 
-# has current_servo as parameter   
+# has current_servo as parameter
 def tune(freq, target_freq_low, target_freq_high, current_servo):
-    print("tunning servo " + str(current_servo))
-    if freq > target_freq_high:
+    # Check if Frequency is in Target Frequency Limits
+    if (freq > target_freq_low) and (freq < target_freq_high):
+        lcd.clear() # Inform User
+        lcd.message = "Finished\ntuning!"
+        print("Finished tuning")
+        time.sleep(2)
+        return True
+
+    # If Frequency is Greater than Target Frequency
+    elif freq > target_freq_high:
+        print("tuneing servo " + str(current_servo))
         move_servo(0.5, 0.2, current_servo)
         lcd.clear()
         print("Frequency too high, strum again!")
         lcd.message = str(freq) + " too high,\nstrum again!"
+    
+    # If Frequency is Less than Target Frequency
     elif freq < target_freq_low:
+        print("tuneing servo " + str(current_servo))
         move_servo(-0.5, 0.2, current_servo)
         lcd.clear()
         print("Frequency too low, strum again!")
         lcd.message = str(freq) + " too low,\nstrum again!"
-    return freq
 
-# Moves Servo At Specified Throttle for a Given Time
-def move_servo(throttle, interval):
-    servo1.throttle = throttle
-    servo2.throttle = throttle
-    time.sleep(interval)
-    servo1.throttle = 0
-    servo2.throttle = 0
-    time.sleep(interval)
+    time.sleep(2)
+    return False
+
 
 # has current_servo as parameter
 def move_servo(throttle, interval, current_servo):
@@ -204,64 +199,74 @@ def move_servo(throttle, interval, current_servo):
 
 ############### ASYNCHRONOUS FUNCTIONS ###############
 
-# Continuously Calculate Frequency of Input Waveform
-async def monitor_freq(pin):
+# Calculate Frequency of Input Waveform
+def read_freq(pin):
     with countio.Counter(pin) as interrupt:
+        prev_time = 0
         while True:
+            freq = 0
+            if interrupt.count == 1:
+                prev_time = time.monotonic_ns()
+                
             # Check for Interrupt
-            if interrupt.count > 0:
-                global prev_time, output_freq
+            if interrupt.count > 10:
                 # Calculate Frequency
                 curr_time = time.monotonic_ns()
                 delta_t = curr_time - prev_time
-                output_freq = interrupt.count / (delta_t / 1000000000)
+                freq = (interrupt.count + 1) / (delta_t / 1000000000)
                 
-                # Update Prev Time and Reset Interrupt
-                prev_time = curr_time
-                interrupt.count = 0
-                print("Frequency is", output_freq, "Hz")
-            await asyncio.sleep(0.5)
-
-# Continuously Turn Motor Until Tuned
-async def turn_motor():
-    while True:
-        global current_servo
-        global output_freq
-        # Check if Output Frequency is in Pass Band Limits
-        if (output_freq > pass_band_low) and (output_freq < pass_band_high):
-            # Check if Output Frequency is not in Target Frequency Limits
-            if (output_freq < target_freq_low) or (output_freq > target_freq_high):
-                #output_freq = tune(output_freq, target_freq_low, target_freq_high) # Tune String
-                output_freq = tune(output_freq, target_freq_low, target_freq_high, current_servo) 
-            # Tuning Finished
-            else:
-                lcd.clear() # Inform User
-                lcd.message = "Finished\ntuning!"
-                print("Finished tuning")
-                time.sleep(2)
-                init() # Reset Program
-        
-        # Check for Doubled Frequency Values
-        elif (output_freq > double_pass_band_low) and (output_freq < double_pass_band_high):
-            if (output_freq < double_target_freq_low) or (output_freq > double_target_freq_high):
-                #output_freq = tune(output_freq, double_target_freq_low, double_target_freq_high)
-                output_freq = tune(output_freq, target_freq_low, target_freq_high, current_servo) 
-            # Tuning Finished
-            else:
-                lcd.clear() # Inform User
-                lcd.message = "Finished\ntuning!"
-                time.sleep(1)
-                init() # Reset Program
-        
-        await asyncio.sleep(2.0)
-
+                return freq
+                
 # Main
-async def main():
-    init()
-    freq_task = asyncio.create_task(monitor_freq(board.RX))
-    motor_task = asyncio.create_task(turn_motor())
-    print("Starting...")
-    await asyncio.gather(freq_task, motor_task)
+def main():
+    sampling_size = 20
+    
+    while True:
+        # Step 1: User Selects a String
+        print("INITIALIZATION\n")
+        init()
+        
+        in_tune = False
+        while not in_tune:
+            # Step 2: Read Frequency
+            print("READ FREQUENCIES\n")
+            frequencies = []
+            double_frequencies = []
+            
+            while len(frequencies) < sampling_size and len(double_frequencies) < sampling_size:
+                # Calculate Frequency
+                curr_freq = read_freq(board.RX)
+                
+                # If current frequency is in acceptable range
+                if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
+                    print("Frequency is", curr_freq, "Hz")
+                    
+                    frequencies.append(curr_freq)
+                # Check doubled frequencies
+                elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
+                    double_frequencies.append(curr_freq)
+            
+            # Determine which list finished first
+            if double_frequencies == sampling_size:
+                frequencies = double_frequencies
+            
+            # Step 3: Remove Outliers with IQR
+            frequencies.sort()
+            print(frequencies)
+            frequencies = np.array(frequencies)
+            Q1 = np.median(frequencies[:int(sampling_size/2)])
+            Q3 = np.median(frequencies[int(sampling_size/2):])
+            frequencies = [x for x in frequencies if (x >= Q1 and x <= Q3)]
+            print(frequencies)
+            
+            # Step 3: Calculate Average Frequency
+            #print("AVERAGEING FREQUENCIES\n")
+            average_freq = sum(frequencies) / len(frequencies)
+            
+            print("Average Frequency is " + str(average_freq) + " Hz")
+            
+            # Step 4: Turn Motor to Tune or Finish Tuning
+            print("TUNING\n")
+            in_tune = tune(average_freq, target_freq_low, target_freq_high, current_servo)
 
-# Run Program
-asyncio.run(main())
+main()
