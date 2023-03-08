@@ -1,6 +1,7 @@
 import board
 import countio
 import time
+import pulseio
 import pwmio
 import digitalio
 from adafruit_motor import servo
@@ -13,6 +14,7 @@ except ImportError:
 
 string_notes = {'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }
 notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
+curr_note = 'e'
 notes_to_servo = {'e': 1, 'A': 2, 'D': 3, 'G': 4, 'B': 5, 'E': 6} # for moving servos
 current_servo = 0
 start_threshold = 10 # Range of Frequencies Considered
@@ -87,7 +89,7 @@ button2.pull = digitalio.Pull.UP
 
 # Initialize Tuning
 def init():
-    global current_servo
+    global current_servo, curr_note
     global target_freq_low, target_freq_high, pass_band_low, pass_band_high
     global double_target_freq_low, double_target_freq_high, double_pass_band_low, double_pass_band_high
 
@@ -115,14 +117,16 @@ def init():
     # Inform User of Selected String
     lcd.clear()
     lcd.message = "Selected string \n" + note.upper()
+    curr_note = note
     time.sleep(0.5)
 
     # Inform User of Target Frequency and set current_servo
     target_freq = string_notes[note]
     current_servo = notes_to_servo[note]
-    print("Current servo = " + str(current_servo))
+    print("Current Servo: " + str(current_servo))
     lcd.clear()
     lcd.message = "Target: " + str(target_freq) + " Hz"
+    print("Target: ", str(target_freq), "Hz")
     time.sleep(0.5)
 
     # Calculate Limits of Target Frequency and Pass Band Filter
@@ -144,7 +148,7 @@ def tune(freq, target_freq_low, target_freq_high, current_servo):
     if (freq > target_freq_low) and (freq < target_freq_high):
         lcd.clear() # Inform User
         lcd.message = "Finished\ntuning!"
-        print("Finished tuning")
+        print("Finished Tuning")
         time.sleep(2)
         return True
 
@@ -200,31 +204,53 @@ def move_servo(throttle, interval, current_servo):
 ############### ASYNCHRONOUS FUNCTIONS ###############
 
 # Calculate Frequency of Input Waveform
-def read_freq(pin):
-    with countio.Counter(pin) as interrupt:
-        prev_time = 0
-        while True:
-            freq = 0
-            if interrupt.count == 1:
-                prev_time = time.monotonic_ns()
-                
+def read_freq(rx, pulse_length):#pin, note):    
+    rx.clear()
+    rx.resume()
+    
+    while True: 
+        if len(rx) == pulse_length:
+            sum = 0
+            for i in range(pulse_length):
+                sum += rx[i]
+
+            freq = 1 / ((sum / (pulse_length/2)) / 1000000)
+            rx.pause()
+            return freq
+    
+    
+    #with countio.Counter(pin) as interrupt:
+    #    prev_time = time.monotonic_ns()
+    #    while True:
+
             # Check for Interrupt
-            if interrupt.count > 10:
+    #        if interrupt.count > note_ints[note]:
                 # Calculate Frequency
-                curr_time = time.monotonic_ns()
-                delta_t = curr_time - prev_time
-                freq = (interrupt.count + 1) / (delta_t / 1000000000)
-                
-                return freq
+    #            curr_time = time.monotonic_ns()
+    #            delta_t = curr_time - prev_time
+    #            freq = interrupt.count / (delta_t / 1000000000)
+                #if freq >= pass_band_low and freq <= pass_band_high:
+                #    print("\n", delta_t)
+                #    print(delta_t / 1000000000)
+                #    print(interrupt.count / delta_t)
+    #            return freq #- note_decs[note]
                 
 # Main
 def main():
-    sampling_size = 20
+    global curr_note
+    # 'e' and 'E' values are finalized
+    # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
+    sampling_sizes = {'e': 25, 'A': 15, 'D': 20, 'G': 10, 'B': 10, 'E': 10} 
+    pulse_lengths = {'e': 10, 'A': 15, 'D':25, 'G': 10, 'B': 10, 'E': 100}
     
     while True:
         # Step 1: User Selects a String
         print("INITIALIZATION\n")
         init()
+        pulse_length = pulse_lengths[curr_note]
+        sampling_size = sampling_sizes[curr_note]
+        rx = pulseio.PulseIn(board.RX, pulse_length, False)
+        rx.pause()
         
         in_tune = False
         while not in_tune:
@@ -235,33 +261,43 @@ def main():
             
             while len(frequencies) < sampling_size and len(double_frequencies) < sampling_size:
                 # Calculate Frequency
-                curr_freq = read_freq(board.RX)
+                curr_freq = read_freq(rx, pulse_length)#board.RX, curr_note)
                 
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
-                    print("Frequency is", curr_freq, "Hz")
-                    
+                    print(curr_freq)
+                    #print("Frequency is", curr_freq, "Hz")
                     frequencies.append(curr_freq)
+                    
                 # Check doubled frequencies
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
-                    double_frequencies.append(curr_freq)
+                    #print("Doubled Frequency is", curr_freq, "Hz")
+                    double_frequencies.append(curr_freq/2)
             
             # Determine which list finished first
-            if double_frequencies == sampling_size:
-                frequencies = double_frequencies
+            curr_freqs = []
+            if len(double_frequencies) == sampling_size:
+                curr_freqs = double_frequencies
+            else:
+                curr_freqs = frequencies
             
-            # Step 3: Remove Outliers with IQR
-            frequencies.sort()
+            # Step 3: Remove Outliers with IQR if Necessary
+            if len(sorted(curr_freqs)):
+                curr_freqs.sort()
+            print(curr_freqs)
+            curr_freqs = np.array(curr_freqs)
+            Q1 = np.median(curr_freqs[:int(sampling_size/2)])
+            Q3 = np.median(curr_freqs[int(sampling_size/2):])
+            IQR = Q3 - Q1
+            print(IQR)
+            frequencies = [x for x in curr_freqs if (x >= Q1 - (0.5*IQR) and x <= Q3 + (0.5*IQR))]
             print(frequencies)
-            frequencies = np.array(frequencies)
-            Q1 = np.median(frequencies[:int(sampling_size/2)])
-            Q3 = np.median(frequencies[int(sampling_size/2):])
-            frequencies = [x for x in frequencies if (x >= Q1 and x <= Q3)]
-            print(frequencies)
+            if len(frequencies):
+                curr_freqs = frequencies
             
             # Step 3: Calculate Average Frequency
             #print("AVERAGEING FREQUENCIES\n")
-            average_freq = sum(frequencies) / len(frequencies)
+            average_freq = sum(curr_freqs) / len(curr_freqs)
             
             print("Average Frequency is " + str(average_freq) + " Hz")
             
@@ -269,4 +305,7 @@ def main():
             print("TUNING\n")
             in_tune = tune(average_freq, target_freq_low, target_freq_high, current_servo)
 
-main()
+        rx.deinit()
+
+if __name__ == "__main__":
+    main()
