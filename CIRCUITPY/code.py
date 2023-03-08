@@ -207,15 +207,19 @@ def move_servo(throttle, interval, current_servo):
 def read_freq(rx, pulse_length):#pin, note):    
     rx.clear()
     rx.resume()
-    
     while True: 
         if len(rx) == pulse_length:
+            rx.pause()
             sum = 0
-            for i in range(pulse_length):
+            val = 0
+            #if rx[0] == 65535:
+            #    val = 2
+                
+            for i in range(val, pulse_length):
+                #print(rx[i]) 
                 sum += rx[i]
 
-            freq = 1 / ((sum / (pulse_length/2)) / 1000000)
-            rx.pause()
+            freq = 1 / ((sum / ((pulse_length - val)/2)) / 1000000)
             return freq
     
     
@@ -238,10 +242,17 @@ def read_freq(rx, pulse_length):#pin, note):
 # Main
 def main():
     global curr_note
-    # 'e' and 'E' values are finalized
+    # 'e', 'E', 'B' values are finalized
+    
+    
     # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
-    sampling_sizes = {'e': 25, 'A': 15, 'D': 20, 'G': 10, 'B': 10, 'E': 10} 
-    pulse_lengths = {'e': 10, 'A': 15, 'D':25, 'G': 10, 'B': 10, 'E': 100}
+    
+    # Upper notes have less precision in their arrays, e.g. a low 'e' has values within 1 Hz of the min and max,
+    # while a high 'E' has values within 3 Hz of the min and max
+    # 'B' has within 2 Hz
+    
+    sampling_sizes = {'e': 25, 'A': 15, 'D': 18, 'G': 15, 'B': 12, 'E': 10} 
+    pulse_lengths = {'e': 10, 'A': 16, 'D': 60, 'G': 30, 'B': 80, 'E': 100}
     
     while True:
         # Step 1: User Selects a String
@@ -265,18 +276,18 @@ def main():
                 
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
-                    print(curr_freq)
-                    #print("Frequency is", curr_freq, "Hz")
+                    print("Frequency is", curr_freq, "Hz")
                     frequencies.append(curr_freq)
                     
                 # Check doubled frequencies
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
-                    #print("Doubled Frequency is", curr_freq, "Hz")
+                    print("Doubled Frequency is", curr_freq, "Hz")
                     double_frequencies.append(curr_freq/2)
             
             # Determine which list finished first
             curr_freqs = []
             if len(double_frequencies) == sampling_size:
+                print("using doubled")
                 curr_freqs = double_frequencies
             else:
                 curr_freqs = frequencies
