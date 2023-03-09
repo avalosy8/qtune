@@ -212,14 +212,15 @@ def read_freq(rx, pulse_length):#pin, note):
             rx.pause()
             sum = 0
             val = 0
-            #if rx[0] == 65535:
-            #    val = 2
                 
-            for i in range(val, pulse_length):
-                #print(rx[i]) 
-                sum += rx[i]
+            for i in range(0, pulse_length, 2):
+                if rx[i] < 10000 and rx[i+1] < 10000:
+                    sum += rx[i] + rx[i+1]
+                else:
+                    val = val + 2
 
             freq = 1 / ((sum / ((pulse_length - val)/2)) / 1000000)
+            print(freq)
             return freq
     
     
@@ -242,17 +243,12 @@ def read_freq(rx, pulse_length):#pin, note):
 # Main
 def main():
     global curr_note
-    # 'e', 'E', 'B' values are finalized
     
     
     # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
     
-    # Upper notes have less precision in their arrays, e.g. a low 'e' has values within 1 Hz of the min and max,
-    # while a high 'E' has values within 3 Hz of the min and max
-    # 'B' has within 2 Hz
-    
-    sampling_sizes = {'e': 25, 'A': 15, 'D': 18, 'G': 15, 'B': 12, 'E': 10} 
-    pulse_lengths = {'e': 10, 'A': 16, 'D': 60, 'G': 30, 'B': 80, 'E': 100}
+    sampling_sizes = {'e': 10, 'A': 10, 'D': 10, 'G': 10, 'B': 10, 'E': 10} 
+    pulse_lengths = {'e': 100, 'A': 100, 'D': 100, 'G': 100, 'B': 100, 'E': 200}
     
     while True:
         # Step 1: User Selects a String
@@ -287,7 +283,7 @@ def main():
             # Determine which list finished first
             curr_freqs = []
             if len(double_frequencies) == sampling_size:
-                print("using doubled")
+                print("using doubles")
                 curr_freqs = double_frequencies
             else:
                 curr_freqs = frequencies
@@ -300,7 +296,6 @@ def main():
             Q1 = np.median(curr_freqs[:int(sampling_size/2)])
             Q3 = np.median(curr_freqs[int(sampling_size/2):])
             IQR = Q3 - Q1
-            print(IQR)
             frequencies = [x for x in curr_freqs if (x >= Q1 - (0.5*IQR) and x <= Q3 + (0.5*IQR))]
             print(frequencies)
             if len(frequencies):
