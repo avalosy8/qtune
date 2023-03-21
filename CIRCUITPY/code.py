@@ -208,6 +208,11 @@ def read_freq(rx, pulse_length):#pin, note):
     rx.clear()
     rx.resume()
     while True: 
+        
+        # Check if Restart Pressed
+        if not button2.value:
+            return -1
+        
         if len(rx) == pulse_length:
             rx.pause()
             sum = 0
@@ -220,7 +225,6 @@ def read_freq(rx, pulse_length):#pin, note):
                     val = val + 2
 
             freq = 1 / ((sum / ((pulse_length - val)/2)) / 1000000)
-            print(freq)
             return freq
     
     
@@ -242,8 +246,7 @@ def read_freq(rx, pulse_length):#pin, note):
                 
 # Main
 def main():
-    global curr_note
-    
+    global curr_note    
     
     # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
     
@@ -253,6 +256,8 @@ def main():
     while True:
         # Step 1: User Selects a String
         print("INITIALIZATION\n")
+        restart = False
+        time.sleep(0.5)
         init()
         pulse_length = pulse_lengths[curr_note]
         sampling_size = sampling_sizes[curr_note]
@@ -261,6 +266,7 @@ def main():
         
         in_tune = False
         while not in_tune:
+            
             # Step 2: Read Frequency
             print("READ FREQUENCIES\n")
             frequencies = []
@@ -269,6 +275,11 @@ def main():
             while len(frequencies) < sampling_size and len(double_frequencies) < sampling_size:
                 # Calculate Frequency
                 curr_freq = read_freq(rx, pulse_length)#board.RX, curr_note)
+                
+                # Check if Restart Button Pressed
+                if curr_freq == -1:
+                    restart = True
+                    break
                 
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
@@ -279,6 +290,9 @@ def main():
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
                     print("Doubled Frequency is", curr_freq, "Hz")
                     double_frequencies.append(curr_freq/2)
+                    
+            if restart == True:
+                break
             
             # Determine which list finished first
             curr_freqs = []
