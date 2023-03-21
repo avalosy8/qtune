@@ -87,6 +87,10 @@ button2.pull = digitalio.Pull.UP
 
 ###################### FUNCTIONS ######################
 
+# Helper function to map value from one range to another
+def map_to(x, in_min, in_max, out_min, out_max):
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
 # Initialize Tuning
 def init():
     global current_servo, curr_note
@@ -112,6 +116,7 @@ def init():
             time.sleep(0.5)  # Debounce Button
             note = notes[idx] # Update String Note
         lcd.message = "Select string " + note
+        selected = True
 
     # INITIALIZE VARIABLES #
     # Inform User of Selected String
@@ -143,31 +148,36 @@ def init():
 
 
 # has current_servo as parameter
-def tune(freq, target_freq_low, target_freq_high, current_servo):
+def tune(freq, current_servo):
+    global pass_band_low, pass_band_high, target_freq_low, target_freq_high
+    
     # Check if Frequency is in Target Frequency Limits
+    percent_tuned = -1
     if (freq > target_freq_low) and (freq < target_freq_high):
         lcd.clear() # Inform User
-        lcd.message = "Finished\ntuning!"
-        print("Finished Tuning")
+        lcd.message = "100% In Tune!"
+        print("100% In Tune")
         time.sleep(2)
         return True
 
     # If Frequency is Greater than Target Frequency
     elif freq > target_freq_high:
+        percent_tuned = map_to(freq, pass_band_high, target_freq_high, 0, 100)
+        
         print("tuneing servo " + str(current_servo))
         move_servo(0.5, 0.2, current_servo)
-        lcd.clear()
-        print("Frequency too high, strum again!")
-        lcd.message = str(freq) + " too high,\nstrum again!"
+        #print("Frequency too high, strum again!")
     
     # If Frequency is Less than Target Frequency
     elif freq < target_freq_low:
+        percent_tuned = map_to(freq, pass_band_low, target_freq_low, 0, 100)
         print("tuneing servo " + str(current_servo))
         move_servo(-0.5, 0.2, current_servo)
-        lcd.clear()
-        print("Frequency too low, strum again!")
-        lcd.message = str(freq) + " too low,\nstrum again!"
+        #print("Frequency too low, strum again!")
 
+    lcd.clear()
+    print(str(percent_tuned) + "% in tune")
+    lcd.message = str(percent_tuned) + "% in tune\nstrum again!"
     time.sleep(2)
     return False
 
@@ -323,9 +333,19 @@ def main():
             
             # Step 4: Turn Motor to Tune or Finish Tuning
             print("TUNING\n")
-            in_tune = tune(average_freq, target_freq_low, target_freq_high, current_servo)
+            in_tune = tune(average_freq, current_servo)
 
         rx.deinit()
+
+# 72.4 Hz
+
+# 82.4 Hz
+
+# 92.4 Hz
+
+# 1 - (|Calc Hz - Target Hz| / start threshold) * 100
+
+# 5 Hz = 0% -- some value -- 0 Hz = 100%
 
 if __name__ == "__main__":
     main()
