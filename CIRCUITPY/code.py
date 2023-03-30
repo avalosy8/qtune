@@ -12,7 +12,7 @@ try:
 except ImportError:
   import numpy as np
 
-string_notes = {'e': 82, 'A': 110, 'D': 147, 'G': 196, 'B': 247, 'E': 330 }
+string_notes = {'e': 82.41, 'A': 110.00, 'D': 146.83, 'G': 196.00, 'B': 246.94, 'E': 329.63 }
 notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
 curr_note = 'e'
 notes_to_servo = {'e': 1, 'A': 2, 'D': 3, 'G': 4, 'B': 5, 'E': 6} # for moving servos
@@ -45,12 +45,12 @@ prev_time = 0 # state variable used to calculate period of waveform
 # servo2 = servo.ContinuousServo(
 #     pwm_servo2, min_pulse=600, max_pulse=2460
 # )
-pwm1 = pwmio.PWMOut(board.A1, frequency=50)
-pwm2 = pwmio.PWMOut(board.A2, frequency=50)
-pwm3 = pwmio.PWMOut(board.A0, frequency=50)
-pwm4 = pwmio.PWMOut(board.D13, frequency=50)
-pwm5 = pwmio.PWMOut(board.SCL, frequency=50)
-pwm6 = pwmio.PWMOut(board.SDA, frequency=50)
+pwm1 = pwmio.PWMOut(board.D13, frequency=50)
+pwm2 = pwmio.PWMOut(board.SCL, frequency=50)
+pwm3 = pwmio.PWMOut(board.SDA, frequency=50)
+pwm4 = pwmio.PWMOut(board.D25, frequency=50)
+pwm5 = pwmio.PWMOut(board.D24, frequency=50)
+pwm6 = pwmio.PWMOut(board.A2, frequency=50)
 
 servo1 = servo.ContinuousServo(pwm1)
 servo2 = servo.ContinuousServo(pwm2)
@@ -76,11 +76,11 @@ lcd = characterlcd.Character_LCD_Mono( # Initialize the lcd class
 
 
 ################ BUTTON CONFIGURATION #################
-button1 = digitalio.DigitalInOut(board.D25) # Change String
+button1 = digitalio.DigitalInOut(board.A1) # Change String
 button1.direction = digitalio.Direction.INPUT
 button1.pull = digitalio.Pull.UP
 
-button2 = digitalio.DigitalInOut(board.D24) # Select String
+button2 = digitalio.DigitalInOut(board.A0) # Select String
 button2.direction = digitalio.Direction.INPUT
 button2.pull = digitalio.Pull.UP
 
@@ -116,7 +116,6 @@ def init():
             time.sleep(0.5)  # Debounce Button
             note = notes[idx] # Update String Note
         lcd.message = "Select string " + note
-        selected = True
 
     # INITIALIZE VARIABLES #
     # Inform User of Selected String
@@ -150,7 +149,7 @@ def init():
 # has current_servo as parameter
 def tune(freq, current_servo):
     global pass_band_low, pass_band_high, target_freq_low, target_freq_high
-    
+
     # Check if Frequency is in Target Frequency Limits
     percent_tuned = -1
     if (freq > target_freq_low) and (freq < target_freq_high):
@@ -163,16 +162,18 @@ def tune(freq, current_servo):
     # If Frequency is Greater than Target Frequency
     elif freq > target_freq_high:
         percent_tuned = map_to(freq, pass_band_high, target_freq_high, 0, 100)
-        
+        interval = map_to(percent_tuned, 100, 0, 0.1, 1.0)
+
         print("tuneing servo " + str(current_servo))
-        move_servo(0.5, 0.2, current_servo)
+        move_servo(0.5, interval, current_servo)
         #print("Frequency too high, strum again!")
-    
+
     # If Frequency is Less than Target Frequency
     elif freq < target_freq_low:
         percent_tuned = map_to(freq, pass_band_low, target_freq_low, 0, 100)
+        interval = map_to(percent_tuned, 100, 0, 0.1, 1.0)
         print("tuneing servo " + str(current_servo))
-        move_servo(-0.5, 0.2, current_servo)
+        move_servo(-0.5, interval, current_servo)
         #print("Frequency too low, strum again!")
 
     lcd.clear()
@@ -184,7 +185,7 @@ def tune(freq, current_servo):
 
 # has current_servo as parameter
 def move_servo(throttle, interval, current_servo):
-    print("moving servo: " + str(current_servo))
+    print("moving servo: " + str(current_servo) + " for " + str(interval) + " ms")
     if current_servo == 1:
         servo1.throttle = throttle
         time.sleep(interval)
@@ -214,20 +215,20 @@ def move_servo(throttle, interval, current_servo):
 ############### ASYNCHRONOUS FUNCTIONS ###############
 
 # Calculate Frequency of Input Waveform
-def read_freq(rx, pulse_length):#pin, note):    
+def read_freq(rx, pulse_length):#pin, note):
     rx.clear()
     rx.resume()
-    while True: 
-        
+    while True:
+
         # Check if Restart Pressed
         if not button2.value:
             return -1
-        
+
         if len(rx) == pulse_length:
             rx.pause()
             sum = 0
             val = 0
-                
+
             for i in range(0, pulse_length, 2):
                 if rx[i] < 10000 and rx[i+1] < 10000:
                     sum += rx[i] + rx[i+1]
@@ -236,33 +237,16 @@ def read_freq(rx, pulse_length):#pin, note):
 
             freq = 1 / ((sum / ((pulse_length - val)/2)) / 1000000)
             return freq
-    
-    
-    #with countio.Counter(pin) as interrupt:
-    #    prev_time = time.monotonic_ns()
-    #    while True:
 
-            # Check for Interrupt
-    #        if interrupt.count > note_ints[note]:
-                # Calculate Frequency
-    #            curr_time = time.monotonic_ns()
-    #            delta_t = curr_time - prev_time
-    #            freq = interrupt.count / (delta_t / 1000000000)
-                #if freq >= pass_band_low and freq <= pass_band_high:
-                #    print("\n", delta_t)
-                #    print(delta_t / 1000000000)
-                #    print(interrupt.count / delta_t)
-    #            return freq #- note_decs[note]
-                
 # Main
 def main():
-    global curr_note    
-    
+    global curr_note
+
     # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
-    
-    sampling_sizes = {'e': 10, 'A': 10, 'D': 10, 'G': 10, 'B': 10, 'E': 10} 
-    pulse_lengths = {'e': 100, 'A': 100, 'D': 100, 'G': 100, 'B': 100, 'E': 200}
-    
+
+    sampling_sizes = {'e': 5, 'A': 5, 'D': 5, 'G': 5, 'B': 5, 'E': 5}
+    pulse_lengths = {'e': 100, 'A': 100, 'D': 140, 'G': 150, 'B': 300, 'E': 300}
+
     while True:
         # Step 1: User Selects a String
         print("INITIALIZATION\n")
@@ -273,37 +257,35 @@ def main():
         sampling_size = sampling_sizes[curr_note]
         rx = pulseio.PulseIn(board.RX, pulse_length, False)
         rx.pause()
-        
+
         in_tune = False
         while not in_tune:
-            
+
             # Step 2: Read Frequency
             print("READ FREQUENCIES\n")
             frequencies = []
             double_frequencies = []
-            
-            while len(frequencies) < sampling_size and len(double_frequencies) < sampling_size:
+
+            while len(frequencies) < sampling_sizes[curr_note] and len(double_frequencies) < sampling_sizes[curr_note]:
                 # Calculate Frequency
                 curr_freq = read_freq(rx, pulse_length)#board.RX, curr_note)
-                
+
                 # Check if Restart Button Pressed
                 if curr_freq == -1:
                     restart = True
                     break
-                
+
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
-                    print("Frequency is", curr_freq, "Hz")
                     frequencies.append(curr_freq)
-                    
+
                 # Check doubled frequencies
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
-                    print("Doubled Frequency is", curr_freq, "Hz")
                     double_frequencies.append(curr_freq/2)
-                    
+
             if restart == True:
                 break
-            
+
             # Determine which list finished first
             curr_freqs = []
             if len(double_frequencies) == sampling_size:
@@ -311,7 +293,7 @@ def main():
                 curr_freqs = double_frequencies
             else:
                 curr_freqs = frequencies
-            
+
             # Step 3: Remove Outliers with IQR if Necessary
             if len(sorted(curr_freqs)):
                 curr_freqs.sort()
@@ -320,32 +302,23 @@ def main():
             Q1 = np.median(curr_freqs[:int(sampling_size/2)])
             Q3 = np.median(curr_freqs[int(sampling_size/2):])
             IQR = Q3 - Q1
-            frequencies = [x for x in curr_freqs if (x >= Q1 - (0.5*IQR) and x <= Q3 + (0.5*IQR))]
+            frequencies = [x for x in curr_freqs if (x >= Q1 and x <= Q3)]
             print(frequencies)
+            print("Difference is " + str(frequencies[-1]) + " - " + str(frequencies[0]) + " = " + str(frequencies[-1] - frequencies[0]) + " Hz")
             if len(frequencies):
                 curr_freqs = frequencies
-            
+
             # Step 3: Calculate Average Frequency
             #print("AVERAGEING FREQUENCIES\n")
             average_freq = sum(curr_freqs) / len(curr_freqs)
-            
+
             print("Average Frequency is " + str(average_freq) + " Hz")
-            
+
             # Step 4: Turn Motor to Tune or Finish Tuning
             print("TUNING\n")
             in_tune = tune(average_freq, current_servo)
 
         rx.deinit()
-
-# 72.4 Hz
-
-# 82.4 Hz
-
-# 92.4 Hz
-
-# 1 - (|Calc Hz - Target Hz| / start threshold) * 100
-
-# 5 Hz = 0% -- some value -- 0 Hz = 100%
 
 if __name__ == "__main__":
     main()
