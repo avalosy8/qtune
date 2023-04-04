@@ -240,6 +240,12 @@ def read_freq(rx, pulse_length):#pin, note):
 # Main
 def main():
     global curr_note
+    
+    #throttle = 0.5
+    #interval = 0.5
+    #for i in range(1, 7):
+    #    move_servo(throttle, interval, i)
+    #    throttle = throttle*-1
 
     # 'A' does not sample for long enough within a single pulse / takes longer for just 10 samples
 
@@ -313,6 +319,7 @@ def main():
                 frequencies.pop(0)
                 print(frequencies)
             
+            difference = frequencies[-1] - frequencies[0]
             if (difference > 3):
                 print("Inacurate reading, strum again!")
                 lcd.message = "Inaccurate reading\n strum again!"
