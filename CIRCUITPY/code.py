@@ -17,8 +17,8 @@ notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
 curr_note = 'e'
 notes_to_servo = {'e': 1, 'A': 2, 'D': 3, 'G': 4, 'B': 5, 'E': 6} # for moving servos
 current_servo = 0
-start_threshold = 10 # Range of Frequencies Considered
-stop_threshold = 1 # Range of Frequencies Considered In Tune
+start_threshold = 15 # Range of Frequencies Considered
+stop_threshold = 0.5 # Range of Frequencies Considered In Tune
 
 # Target Frequency (Lower/Upper Limit of "In Tune" Frequencies for a Note)
 target_freq_low = 0
@@ -62,10 +62,10 @@ servo6 = servo.ContinuousServo(pwm6)
 ################## PIN CONFIGURATION ##################
 lcd_rs = digitalio.DigitalInOut(board.D5)
 lcd_en = digitalio.DigitalInOut(board.D6)
-lcd_d7 = digitalio.DigitalInOut(board.D10)
+lcd_d7 = digitalio.DigitalInOut(board.D12)
 lcd_d6 = digitalio.DigitalInOut(board.D11)
-lcd_d5 = digitalio.DigitalInOut(board.D9)
-lcd_d4 = digitalio.DigitalInOut(board.D12)
+lcd_d5 = digitalio.DigitalInOut(board.D10)
+lcd_d4 = digitalio.DigitalInOut(board.D9)
 lcd_backlight = digitalio.DigitalInOut(board.D4)
 lcd_columns = 16
 lcd_rows = 2
@@ -83,7 +83,6 @@ button1.pull = digitalio.Pull.UP
 button2 = digitalio.DigitalInOut(board.A0) # Select String
 button2.direction = digitalio.Direction.INPUT
 button2.pull = digitalio.Pull.UP
-
 
 ###################### FUNCTIONS ######################
 
@@ -129,7 +128,7 @@ def init():
     current_servo = notes_to_servo[note]
     print("Current Servo: " + str(current_servo))
     lcd.clear()
-    lcd.message = "Target: " + str(target_freq) + " Hz"
+    lcd.message = "Target: " + str(round(target_freq)) + " Hz"
     print("Target: ", str(target_freq), "Hz")
     time.sleep(0.5)
 
@@ -162,7 +161,7 @@ def tune(freq, current_servo):
     # If Frequency is Greater than Target Frequency
     elif freq > target_freq_high:
         percent_tuned = map_to(freq, pass_band_high, target_freq_high, 0, 100)
-        interval = map_to(percent_tuned, 100, 0, 0.1, 1.0)
+        interval = map_to(percent_tuned, 100, 0, 0.05, 1.0)
 
         print("tuneing servo " + str(current_servo))
         move_servo(0.5, interval, current_servo)
@@ -171,14 +170,14 @@ def tune(freq, current_servo):
     # If Frequency is Less than Target Frequency
     elif freq < target_freq_low:
         percent_tuned = map_to(freq, pass_band_low, target_freq_low, 0, 100)
-        interval = map_to(percent_tuned, 100, 0, 0.1, 1.0)
+        interval = map_to(percent_tuned, 100, 0, 0.05, 1.0)
         print("tuneing servo " + str(current_servo))
         move_servo(-0.5, interval, current_servo)
         #print("Frequency too low, strum again!")
 
     lcd.clear()
-    print(str(percent_tuned) + "% in tune")
-    lcd.message = str(percent_tuned) + "% in tune\nstrum again!"
+    print(str(int(percent_tuned)) + "% in tune")
+    lcd.message = str(int(percent_tuned)) + "% in tune\nstrum again!"
     time.sleep(2)
     return False
 
@@ -250,6 +249,9 @@ def main():
     while True:
         # Step 1: User Selects a String
         print("INITIALIZATION\n")
+        lcd.clear()
+        lcd.message = "Initialization"
+        time.sleep(2)
         restart = False
         time.sleep(0.5)
         init()
@@ -305,6 +307,18 @@ def main():
             frequencies = [x for x in curr_freqs if (x >= Q1 and x <= Q3)]
             print(frequencies)
             print("Difference is " + str(frequencies[-1]) + " - " + str(frequencies[0]) + " = " + str(frequencies[-1] - frequencies[0]) + " Hz")
+            difference = frequencies[-1] - frequencies[0]
+            
+            if (difference > 1):
+                frequencies.pop(0)
+                print(frequencies)
+            
+            if (difference > 3):
+                print("Inacurate reading, strum again!")
+                lcd.message = "Inaccurate reading\n strum again!"
+                time.sleep(2)
+                continue
+            
             if len(frequencies):
                 curr_freqs = frequencies
 
