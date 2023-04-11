@@ -1,4 +1,4 @@
-# qtune: Automatic Guitar Tuner
+# QTune: Automatic Guitar Tuner
 This is a repository for an automatic guitar tuner project. 
 This project utilizes the Adafruit Feather RP2040 with CircuitPython.
 
