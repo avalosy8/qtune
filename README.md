@@ -5,7 +5,7 @@ This project utilizes the Adafruit Feather RP2040 with CircuitPython.
 ## Hardware Setup
 1. Using the hooks and rubber bands, secure the device on the head of the guitar. 
 2. Using the clip on attachment, clip the piezo sensor on the edge of the guitar's head.
-3. Plug the usb to type-c cable to the power bank and power it on to start the program.
+3. Plug the USB to Type-C cable to the power bank and power it on to start the program.
 4. Using the push buttons and LCD interface, follow the displayed prompts.
 
 ## Software Installation
