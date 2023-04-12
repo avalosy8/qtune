@@ -13,10 +13,27 @@ except ImportError:
   import numpy as np
 
 ###################### FUNCTIONS ######################
-
-# Initialize Tuning
 def init(lcd, button1, button2, start_threshold, stop_threshold):
-    # Initialize Note Variables
+    """
+    Initializes Tuning
+    
+    Gets the user input on what string to tune and sets up variables accordingly
+    
+    Parameters:
+    lcd (character_lcd): The module for interfacing with monochromatic character LCDs
+    button1 (DigitalInOut): The "change" button
+    button2 (DigitalInOut): The "start" button"
+    start_threshold (float): The frequencies considered for tuning (target +/- start_threshold)
+    stop_threshold (float): The frequencies considered in tune (target +/- stop_threshold)
+    
+    Returns:
+    str: The current selected note
+    int: The servo to be used
+    list: Target limits
+    list: Passband limits
+    """
+    
+    # INITIALIZE NOTE VARIABLES #
     string_notes = {'e': 82.41, 'A': 110.00, 'D': 146.83, 'G': 196.00, 'B': 246.94, 'E': 329.63 }
     notes = {0: 'e', 1: 'A', 2: 'D', 3: 'G', 4: 'B', 5: 'E'}
     curr_note = 'e'
@@ -64,8 +81,27 @@ def init(lcd, button1, button2, start_threshold, stop_threshold):
     
     return curr_note, curr_servo, target_limits, pass_band_limits
 
-# Tune Current String with Motor
+
 def tune(freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, target_freq_high):
+    """
+    Tune Current String with Motor
+    
+    Uses the passed in frequency to determine whether the string is in tune. If not,
+    the motor attached to the string is turned clockwise or counterclockwise
+    
+    Parameters:
+    freq (float): The frequency to compare with the target frequency
+    turned_servo (PWMOut): The servo to turn if string is out of tune
+    pass_band_low (float): The lower limit of the passband
+    pass_band_high (float): The upper limit of the passband
+    target_freq_low (float): The lower limit of the target frequency
+    target_freq_high (float): The upper limit of the target frequency
+    
+    Returns:
+    bool: If the string is in tune or not
+    str: The completion bar of how much the string is in tune
+    """
+    
     # Check if Frequency is in Target Frequency Limits
     percent_tuned = -1
     if (freq > target_freq_low) and (freq < target_freq_high):
@@ -87,7 +123,7 @@ def tune(freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, tar
     time.sleep(interval)
     turned_servo.throttle = 0
 
-    # Inform User of Progress to In Tune
+    # Create Bar for Progress to In Tune
     tune_bar = '['
     prog = int(map_to(percent_tuned, 0, 100, 0, 13))
     for x in range(prog):
@@ -97,14 +133,29 @@ def tune(freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, tar
     tune_bar += ']'    
     return False, tune_bar
 
-# Calculate Frequency of Input Waveform
+
 def read_freq(rx, pulse_length, button2):
+    """
+    Calculate Frequency of Input Waveform
+    
+    Fills the PulseIn object with times for the high and low segments of the waveform
+    until the provided pulse length is reached. The average time is received and then
+    converted to a frequency by taking the reciprocal
+        
+    Parameters:
+    rx (PulseIn): Object that measures the time of each period
+    pulse_length (int): How many measurements to be taken
+    button2: (DigitalInOut): The "reset" button
+    
+    Returns:
+    float: The measured frequency
+    """
+    
     # Reset pulseio pin
     rx.clear()
     rx.resume()
     
     while True:
-
         # Check if Restart Button was Pressed
         if not button2.value:
             return -1
@@ -125,11 +176,22 @@ def read_freq(rx, pulse_length, button2):
 
             # Convert to Frequency with Average Pulse Time
             freq = 1 / ((sum / ((pulse_length - val)/2)) / 1000000)
-            #print(freq)
             return freq
 
-# Helper function to map value from one range to another
 def map_to(x, in_min, in_max, out_min, out_max):
+    """
+    Helper function that maps a value from one range to another
+    
+    Parameters:
+    x (float): The value mapped in the input range
+    in_min (float): The minimum value of the input range
+    in_max (float): The maximum value of the input range
+    out_min (float): The minimum value of the output range
+    out_max (float): The maximum value of the output range
+    
+    Returns:
+    float: The value mapped in the output range
+    """
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 # Main
@@ -169,7 +231,7 @@ def main():
     ############## FOR TESTING PURPOSES (DETUNE GUITAR) ################
     throttle = 0.5
     interval = 0.5
-    for i in range(1, 7):
+    for i in range(1, 7): # Uncomment Line Below
         #move_servo(throttle, interval, i)
         throttle = throttle*-1
     ####################################################################
@@ -200,13 +262,15 @@ def main():
         # Initialize Tuning Process and Inform User to Strum
         sampling_sizes = {'e': 5, 'A': 5, 'D': 5, 'G': 5, 'B': 5, 'E': 5}
         pulse_lengths = {'e': 100, 'A': 100, 'D': 140, 'G': 150, 'B': 300, 'E': 300}
-        pulse_length = pulse_lengths[curr_note]
         sampling_size = sampling_sizes[curr_note]
+        pulse_length = pulse_lengths[curr_note]
+        
+        # Initialize PulseIn object
         rx = pulseio.PulseIn(board.RX, pulse_length, False)
         rx.pause()
+        
         in_tune = False
         restart = False
-        
         while not in_tune:
             lcd.clear()
             lcd.message = "Strum the \'" + curr_note + "\'\nSamples: 0"
@@ -226,12 +290,10 @@ def main():
 
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
-                    print(curr_freq)
                     frequencies.append(curr_freq)
 
                 # Check doubled frequency range
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
-                    print(curr_freq, "(Doubled)")
                     double_frequencies.append(curr_freq/2)
                 
                 # Inform User of Samples Taken
@@ -250,7 +312,6 @@ def main():
             else:
                 curr_freqs = frequencies
             curr_freqs.sort()
-            print(curr_freqs)
             used_freqs = curr_freqs
 
             # If Range is Too Big Remove Outliers with IQR
@@ -265,13 +326,11 @@ def main():
                 difference = curr_freqs[-1] - curr_freqs[0]
                 if (difference > stop_threshold):
                     curr_freqs.pop(0)
-                    print(curr_freqs)
                     
                     # If Range Still too Big, Inaccurate Reading
                     difference = curr_freqs[-1] - curr_freqs[0]
                     if (difference > stop_threshold):
                         lcd.clear()
-                        print("Invalid Reading")
                         lcd.message = "Invalid read\ntry again!"
                         time.sleep(1)
                         continue
@@ -280,10 +339,8 @@ def main():
 
             # Calculate Average Frequency
             average_freq = sum(used_freqs) / len(used_freqs)
-            print("Average Frequency is " + str(average_freq) + " Hz")
 
             # Turn Motor to Tune or Finish Tuning
-            print("TUNING\n")
             turned_servo = servos[curr_servo]
             in_tune, tune_bar = tune(average_freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, target_freq_high)
             if in_tune:
