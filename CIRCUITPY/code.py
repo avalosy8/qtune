@@ -6,6 +6,7 @@ import pwmio
 import digitalio
 from adafruit_motor import servo
 import adafruit_character_lcd.character_lcd as characterlcd
+import random
 
 try:
   import ulab.numpy as np
@@ -82,7 +83,7 @@ def init(lcd, button1, button2, start_threshold, stop_threshold):
     return curr_note, curr_servo, target_limits, pass_band_limits
 
 
-def tune(freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, target_freq_high):
+def tune(freq, turned_servo, throttle, pass_band_low, pass_band_high, target_freq_low, target_freq_high):
     """
     Tune Current String with Motor
     
@@ -107,7 +108,6 @@ def tune(freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, tar
     if (freq > target_freq_low) and (freq < target_freq_high):
         return True, None
 
-    throttle = 0.5
     # If Frequency is Greater than Target Frequency
     if freq > target_freq_high:
         percent_tuned = map_to(freq, pass_band_high, target_freq_high, 0, 100)
@@ -194,6 +194,7 @@ def map_to(x, in_min, in_max, out_min, out_max):
     """
     return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
+
 # Main
 def main():
     ####################### SERVO CONFIGURATION ########################
@@ -229,11 +230,22 @@ def main():
     button2.pull = digitalio.Pull.UP
 
     ############## FOR TESTING PURPOSES (DETUNE GUITAR) ################
-    throttle = 0.5
-    interval = 0.5
-    for i in range(1, 7): # Uncomment Line Below
-        #move_servo(throttle, interval, i)
-        throttle = throttle*-1
+    lcd.clear()
+    lcd.message = " Detune Guitar? \n   [Yes] [No]"
+    time.sleep(0.5)
+    while True:
+        if not button1.value:
+            throttle = -0.5
+            for i in range(0, 6):
+                interval = map_to(random.random(), 0, 1.0, 0.3, 0.7)
+                detune_servo = servos[i]
+                detune_servo.throttle = throttle
+                time.sleep(interval)
+                detune_servo.throttle = 0
+                throttle = throttle*-1
+            break
+        elif not button2.value:
+            break
     ####################################################################
     
     ######################### START OF PROGRAM #########################
@@ -247,6 +259,7 @@ def main():
         start_threshold = 15 # Range of Frequencies Considered
         stop_threshold = 0.5 # Range of Frequencies Considered In Tune
         curr_note, curr_servo, target_limits, pass_band_limits = init(lcd, button1, button2, start_threshold, stop_threshold)
+        time.sleep(0.5)
         
         # Target Frequency (Lower/Upper Limit of "In Tune" Frequencies for a Note)
         target_freq_low = target_limits[0]
@@ -271,10 +284,11 @@ def main():
         
         in_tune = False
         restart = False
+        tune_bar = "[              ]"
         while not in_tune:
+            
             lcd.clear()
-            lcd.message = "Strum the \'" + curr_note + "\'\nSamples: 0"
-            time.sleep(0.5)
+            lcd.message = "Strum the \'" + curr_note + "\'\n" + tune_bar
             # Begin Reading Frequencies
             frequencies = []
             double_frequencies = []
@@ -291,16 +305,12 @@ def main():
                 # If current frequency is in acceptable range
                 if curr_freq >= pass_band_low and curr_freq <= pass_band_high:
                     frequencies.append(curr_freq)
+                    print("\nSamples: " + str(len(frequencies)) + "/" + str(sampling_size) + " and Doubled " + str(len(double_frequencies)) + "/" + str(sampling_size))
 
                 # Check doubled frequency range
                 elif curr_freq >= double_pass_band_low and curr_freq <= double_pass_band_high:
+                    print("\nSamples: " + str(len(frequencies)) + "/" + str(sampling_size) + " and Doubled " + str(len(double_frequencies)) + "/" + str(sampling_size))
                     double_frequencies.append(curr_freq/2)
-                
-                # Inform User of Samples Taken
-                if len(frequencies) > len(double_frequencies):
-                    lcd.message = "\nSamples: " + str(len(frequencies))
-                else:
-                    lcd.message = "\nSamples: " + str(len(double_frequencies))
 
             if restart == True:
                 break
@@ -316,33 +326,41 @@ def main():
 
             # If Range is Too Big Remove Outliers with IQR
             difference = curr_freqs[-1] - curr_freqs[0]
+            print(curr_freqs)
+            print(difference)
             if difference > stop_threshold:
                 curr_freqs = np.array(curr_freqs) # Convert to Numpy array
                 Q1 = np.median(curr_freqs[:int(sampling_size/2)])
                 Q3 = np.median(curr_freqs[int(sampling_size/2):])
                 curr_freqs = [x for x in curr_freqs if (x >= Q1 and x <= Q3)]
+                print(curr_freqs)
                 
-                # If Range too Big, Remove First Element
+                # If Range too Big, remove End Caps
                 difference = curr_freqs[-1] - curr_freqs[0]
-                if (difference > stop_threshold):
-                    curr_freqs.pop(0)
-                    
-                    # If Range Still too Big, Inaccurate Reading
-                    difference = curr_freqs[-1] - curr_freqs[0]
-                    if (difference > stop_threshold):
+                print(difference)
+                if (difference > stop_threshold*3):
+                    if len(curr_freqs) > 2:
+                        del curr_freqs[-1]
+                        del curr_freqs[0]
+                    # If too Innaccurate to Average
+                    else:
                         lcd.clear()
                         lcd.message = "Invalid read\ntry again!"
-                        time.sleep(1)
+                        time.sleep(1.5)
                         continue
 
                 used_freqs = curr_freqs
 
             # Calculate Average Frequency
+            print(used_freqs)
             average_freq = sum(used_freqs) / len(used_freqs)
 
             # Turn Motor to Tune or Finish Tuning
             turned_servo = servos[curr_servo]
-            in_tune, tune_bar = tune(average_freq, turned_servo, pass_band_low, pass_band_high, target_freq_low, target_freq_high)
+            throttle = 0.5
+            if curr_servo > 3:
+                throttle = 0.3
+            in_tune, tune_bar = tune(average_freq, turned_servo, throttle, pass_band_low, pass_band_high, target_freq_low, target_freq_high)
             if in_tune:
                 lcd.clear() # Inform User
                 lcd.message = "100% in tune\n[**************]"
@@ -350,7 +368,6 @@ def main():
             else:
                 lcd.clear()
                 lcd.message = "Strum Again!\n" + tune_bar
-                time.sleep(0.1)
 
         rx.deinit()
 
