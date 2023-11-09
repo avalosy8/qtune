@@ -31,3 +31,6 @@ All of the servo motors are screwed into a 3D printed case, which properly align
 4. While the program runs, the user also has the option to restart the program and select a different string to tune. The program restarts by pressing the rightmost button at any point after the program has initiated.
 5. If the measured frequency is correct, then the tuning is completed and the program restarts. Otherwise, repeat step 3 until the desired frequency value is measured.
 
+## Demo
+
+[![Demo](https://img.youtube.com/vi/emY8-uXGGco/0.jpg)](https://www.youtube.com/watch?v=emY8-uXGGco)
