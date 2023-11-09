@@ -33,6 +33,4 @@ All of the servo motors are screwed into a 3D printed case, which properly align
 
 ### Demo
 
-<div style="text-align: center;">
-  <iframe width="560" height="315" src="https://www.youtube.com/embed/emY8-uXGGco" frameborder="0" allowfullscreen></iframe>
-</div>
+[![Demo](https://img.youtube.com/vi/emY8-uXGGco/0.jpg)](https://www.youtube.com/watch?v=emY8-uXGGco)
